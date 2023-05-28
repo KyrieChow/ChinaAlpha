@@ -1,0 +1,293 @@
+import numpy as np
+import pandas as pd
+from scipy.stats import rankdata
+
+
+def rank(df):
+    """
+    Cross sectional rank
+    :param df: a pandas DataFrame.
+    :return: a pandas DataFrame with rank along columns.
+    """
+    # return df.rank(axis=1, pct=True)
+    return df.rank(pct=True)
+
+
+def delay(df, period=1):
+    """
+    Wrapper function to estimate lag.
+    :param df: a pandas DataFrame.
+    :param period: the lag grade.
+    :return: a pandas DataFrame with lagged time series
+    """
+    return df.shift(period)
+
+
+def correlation(x, y, window=10):
+    """
+    Wrapper function to estimate rolling corelations.
+    :param y: pandas DataFrame.
+    :param x: pandas DataFrame.
+    :param window: the rolling window.
+    :return: a pandas DataFrame with the time-series min over the past 'window' days.
+    """
+    return x.rolling(window).corr(y)
+
+
+def covariance(x, y, window=10):
+    """
+    Wrapper function to estimate rolling covariance.
+    :param y: pandas DataFrame.
+    :param x: pandas DataFrame.
+    :param window: the rolling window.
+    :return: a pandas DataFrame with the time-series min over the past 'window' days.
+    """
+    return x.rolling(window).cov(y)
+
+
+def scale(df, k=1):
+    """
+    Scaling time serie.
+    :param df: a pandas DataFrame.
+    :param k: scaling factor.
+    :return: a pandas DataFrame rescaled df such that sum(abs(df)) = k
+    """
+    return df.div(np.abs(df).sum()).mul(k)
+
+
+def delta(df, period=1):
+    """
+    Wrapper function to estimate difference.
+    :param df: a pandas DataFrame.
+    :param period: the difference grade.
+    :return: a pandas DataFrame with today’s value minus the value 'period' days ago.
+    """
+    return df.diff(period)
+
+
+# signedpower(x, a): replaced with ** or pow(x, n)
+
+
+def decay_linear(df, period=10):
+    """
+    Linear weighted moving average implementation.
+    :param df: a pandas DataFrame.
+    :param period: the LWMA period
+    :return: a pandas DataFrame with the LWMA.
+    """
+    # Clean data
+    if df.isnull().values.any():
+        df.fillna(method='ffill', inplace=True)
+        df.fillna(method='bfill', inplace=True)
+        df.fillna(value=0, inplace=True)
+    na_lwma = np.zeros_like(df)
+    na_lwma[:period, :] = df.iloc[:period, :]
+    na_series = df.as_matrix()
+
+    divisor = period * (period + 1) / 2
+    y = (np.arange(period) + 1) * 1.0 / divisor
+    # Estimate the actual lwma with the actual close.
+    # The backtest engine should assure to be snooping bias free.
+    for row in range(period - 1, df.shape[0]):
+        x = na_series[row - period + 1: row + 1, :]
+        na_lwma[row, :] = (np.dot(x.T, y))
+    return pd.DataFrame(na_lwma, index=df.index)
+
+
+def indneutralize(stock_data, sector_series):
+    """
+    Wrapper function to neutralize industry.
+    a_transform = a / sector_average(a)
+    :param sector_series: a pandas Series of which index of stock codes 
+                        and sector/industry/subindustry column contains these codes.
+    :param stock_data: a pandas DataFrame of which index of date/datetime 
+                        and columns are stock codes as the index of sector_series.
+    :return: a pandas DataFrame shape like stock_data with industry neutralization.
+    """
+    # align sector_series to stock_data in case of stock_data's sparse stocks
+    inner = sector_series[stock_data.columns]
+    stock_data = stock_data.replace([-np.inf, np.inf], 0).fillna(value=0)
+    trans_matrix = []
+    for stock in stock_data.columns:
+        df = inner == inner[stock]
+        df /= df.sum()
+        trans_matrix.append(df)
+    trans_matrix = pd.concat(trans_matrix, axis=1, sort=True)
+    result = pd.DataFrame(np.dot(stock_data.fillna(value=0), trans_matrix.fillna(value=0)),
+                          index=stock_data.index, columns=stock_data.columns)
+    return (stock_data / result)
+
+
+def ts_min(df, window=10):
+    """
+    Wrapper function to estimate rolling min.
+    :param df: a pandas DataFrame.
+    :param window: the rolling window.
+    :return: a pandas DataFrame with the time-series min over the past 'window' days.
+    """
+    return df.rolling(window).min()
+
+
+def ts_max(df, window=10):
+    """
+    Wrapper function to estimate rolling min.
+    :param df: a pandas DataFrame.
+    :param window: the rolling window.
+    :return: a pandas DataFrame with the time-series max over the past 'window' days.
+    """
+    return df.rolling(window).max()
+
+
+def np_rolling_window_values(df, window):
+    if isinstance(df, pd.Series) or isinstance(df, pd.DataFrame):
+        return np.lib.stride_tricks.sliding_window_view(df.values, (window, df.shape[1]))
+    else:
+        return np.lib.stride_tricks.sliding_window_view(df, (window, df.shape[1]))
+
+
+def ts_argmax_deprecated(df, window=10):
+    """
+    Wrapper function to estimate which day ts_max(df, window) occurred on
+    :param df: a pandas DataFrame.
+    :param window: the rolling window.
+    :return: well.. that :)
+    """
+    return df.rolling(window).apply(np.argmax) + 1
+
+
+def ts_argmax(df, window=10):
+    """
+    Wrapper function to estimate which day ts_max(df, window) occurred on
+    :param df: a pandas DataFrame.
+    :param window: the rolling window.
+    :return: well.. that :)
+    """
+    windowed = np_rolling_window_values(df, window)
+    argmax_values = np.argmax(windowed, axis=2).reshape(windowed.shape[0], df.shape[1]) + 1
+    return pd.DataFrame(argmax_values, index=df.index[window - 1:],
+                        columns=df.columns).reindex(index=df.index)
+
+
+def ts_argmin_deprecated(df, window=10):
+    """
+    Wrapper function to estimate which day ts_min(df, window) occurred on
+    :param df: a pandas DataFrame.
+    :param window: the rolling window.
+    :return: well.. that :)
+    """
+    return df.rolling(window).apply(np.argmin) + 1
+
+
+def ts_argmin(df, window=10):
+    """
+    Wrapper function to estimate which day ts_max(df, window) occurred on
+    :param df: a pandas DataFrame.
+    :param window: the rolling window.
+    :return: well.. that :)
+    """
+    windowed = np_rolling_window_values(df, window)
+    argmin_values = np.argmin(windowed, axis=2).reshape(windowed.shape[0], df.shape[1]) + 1
+    return pd.DataFrame(argmin_values, index=df.index[window - 1:],
+                        columns=df.columns).reindex(index=df.index)
+
+
+def ts_rank_deprecated(df, window=10):
+    """
+    Wrapper function to estimate rolling rank.
+    :param df: a pandas DataFrame.
+    :param window: the rolling window.
+    :return: a pandas DataFrame with the time-series rank over the past window days.
+    """
+    return df.rolling(window).apply(rolling_rank)
+
+
+def ts_rank(df, window=10):
+    """
+    Wrapper function to estimate rolling rank.
+    :param df: a pandas DataFrame.
+    :param window: the rolling window.
+    :return: a pandas DataFrame with the time-series rank over the past window days.
+    """
+    windowed = np_rolling_window_values(df, window)
+    ranked_values = np.argsort(windowed, axis=2)[:,:,-1,:].reshape(
+        windowed.shape[0], df.shape[1]) + 1
+    return pd.DataFrame(ranked_values, index=df.index[window - 1:],
+                        columns=df.columns).reindex(index=df.index)
+
+
+def ts_sum(df, window=10):
+    """
+    Wrapper function to estimate rolling sum.
+    :param df: a pandas DataFrame.
+    :param window: the rolling window.
+    :return: a pandas DataFrame with the time-series min over the past 'window' days.
+    """
+
+    return df.rolling(window).sum()
+
+
+def product_deprecated(df, window=10):
+    """
+    Wrapper function to estimate rolling product.
+    :param df: a pandas DataFrame.
+    :param window: the rolling window.
+    :return: a pandas DataFrame with the time-series product over the past 'window' days.
+    """
+    return df.rolling(window).apply(rolling_prod)
+
+
+def product(df, window=10):
+    """
+    Wrapper function to estimate rolling product.
+    :param df: a pandas DataFrame.
+    :param window: the rolling window.
+    :return: a pandas DataFrame with the time-series product over the past 'window' days.
+    """
+    windowed = np_rolling_window_values(df, window)
+    prodded_values = np.prod(windowed, axis=2).reshape(windowed.shape[0], df.shape[1])
+    return pd.DataFrame(prodded_values, index=df.index[window - 1:],
+                        columns=df.columns).reindex(index=df.index)
+
+
+def sma(df, window=10):
+    """
+    adv用sma计算
+    Wrapper function to estimate SMA.
+    :param df: a pandas DataFrame.
+    :param window: the rolling window.
+    :return: a pandas DataFrame with the time-series min over the past 'window' days.
+    """
+    return df.rolling(window).mean()
+
+
+def stddev(df, window=10):
+    """
+    Wrapper function to estimate rolling standard deviation.
+    :param df: a pandas DataFrame.
+    :param window: the rolling window.
+    :return: a pandas DataFrame with the time-series min over the past 'window' days.
+    """
+    return df.rolling(window).std()
+
+
+def rolling_rank(na):
+    """
+    Auxiliary function to be used in pd.rolling_apply
+    :param na: numpy array.
+    :return: The rank of the last value in the array.
+    """
+    if isinstance(na, np.ndarray):
+        return np.argsort(na)[-1] + 1
+    elif isinstance(na, pd.Series) or isinstance(na, pd.DataFrame):
+        return np.argsort(na.values)[-1] + 1
+    else:
+        raise NotImplementedError
+
+
+def rolling_prod(na):
+    """
+    Auxiliary function to be used in pd.rolling_apply
+    :param na: numpy array.
+    :return: The product of the values in the array.
+    """
+    return np.prod(na)
