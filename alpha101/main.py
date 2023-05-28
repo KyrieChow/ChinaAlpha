@@ -12,7 +12,8 @@ def get_alpha(data_open, data_high, data_low, data_close, data_volume, data_retu
     :return: Alphas 101
     """
     output_path = '../outputs/alpha101'
-    al = Alphas(data_open, data_high, data_low, data_close, data_volume, data_returns, data_vwap)
+    al = Alphas(data_open, data_high, data_low, data_close,
+                data_volume, data_returns, data_vwap)
     for alpha in tqdm(al.__methods__()):
         try:
             fun = eval("al."+alpha)

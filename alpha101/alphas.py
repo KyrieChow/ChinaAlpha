@@ -7,7 +7,6 @@ class Alphas:
                  data_volume, data_returns, data_vwap):
         """
 
-        :param data: multi-index pd.DataFrame
         """
         self.open = data_open
         self.high = data_high
@@ -28,7 +27,7 @@ class Alphas:
     def alpha001(self):
         """
         Alpha#1	 (rank(Ts_ArgMax(SignedPower(((returns < 0) ? stddev(returns, 20) : close), 2.), 5)) -0.5)
-        :return: pd.DataFrame
+        :return:
         """
         inner = copy.deepcopy(self.close)
         inner[self.returns < 0] = stddev(self.returns, 20)
@@ -211,7 +210,8 @@ class Alphas:
         """
         cond_1 = ts_sum(self.close, 8) / 8 + stddev(self.close, 8) < ts_sum(self.close, 2) / 2
         cond_2 = sma(self.volume, 20) / self.volume < 1
-        alpha = pd.DataFrame(np.ones_like(self.close), index=self.close.index)
+        alpha = pd.DataFrame(np.ones_like(self.close),
+                             index=self.close.index, columns=self.close.columns)
         alpha[cond_1 | cond_2] = -1
         return alpha
 
@@ -230,7 +230,8 @@ class Alphas:
         :return:
         """
         cond = ts_sum(self.high, 20)/20 < self.high
-        alpha = pd.DataFrame(np.zeros_like(self.close), index=self.close.index)
+        alpha = pd.DataFrame(np.zeros_like(self.close),
+                             index=self.close.index, columns=self.close.columns)
         alpha[cond] = -1 * delta(self.high, 2).fillna(value=0)
         return alpha
 
@@ -288,9 +289,8 @@ class Alphas:
         -1 * rank(delta((close - 1),5))))), 2), 1))))), 1), 5) + ts_rank(delay((-1 * returns), 6), 5))
         :return:
         """
-        return (pd.DataFrame(np.min(product(rank(rank(scale(np.log(ts_sum(ts_min(rank(rank(
-            (-1 * rank(delta((self.close - 1), 5))))), 2), 1))))), 1), 5, axis=1),
-            index=self.close.index) + ts_rank(delay((-1 * self.returns), 6), 5))
+        return ts_min(product(rank(rank(scale(np.log(ts_sum(ts_min(rank(rank(
+            (-1 * rank(delta((self.close - 1), 5))))), 2), 1))))), 1), 5) + ts_rank(delay((-1 * self.returns), 6), 5)
 
     def alpha030(self):
         """
@@ -532,8 +532,7 @@ class Alphas:
         Alpha#57	 (0 - (1 * ((close - vwap) / decay_linear(rank(ts_argmax(close, 30)), 2))))
         :return:
         """
-        return -pd.DataFrame(self.close - self.vwap,
-                             index=self.close.index) / decay_linear(rank(ts_argmax(self.close, 30)), 2)
+        return -(self.close - self.vwap) / decay_linear(rank(ts_argmax(self.close, 30)), 2)
 
     # Alpha#58	 (-1 * Ts_Rank(decay_linear(correlation(IndNeutralize(vwap, IndClass.sector), volume,3.92795), 7.89291), 5.50322))
 
@@ -628,10 +627,9 @@ class Alphas:
          Ts_Rank(decay_linear((rank(((low + open) - (vwap +vwap)))^2), 16.4662), 4.4388))
         :return:
         """
-        return pd.DataFrame(np.max(ts_rank(decay_linear(
+        return df_tuple_max(ts_rank(decay_linear(
             correlation(ts_rank(self.close, 3), ts_rank(sma(self.volume, 180), 12), 18), 4), 16), ts_rank(
-            decay_linear((rank(((self.low + self.open) - (self.vwap + self.vwap))) ** 2), 16), 4), axis=1),
-            index=self.close.index)
+            decay_linear((rank(((self.low + self.open) - (self.vwap + self.vwap))) ** 2), 16), 4))
 
     def alpha072(self):
         """
@@ -649,11 +647,10 @@ class Alphas:
          ((open *0.147155) + (low * (1 - 0.147155)))) * -1), 3.33829), 16.7411)) * -1)
         :return:
         """
-        return pd.DataFrame(np.max(
+        return df_tuple_max(
             rank(decay_linear(delta(self.vwap, 5), 3)), ts_rank(decay_linear(
                 ((delta(((self.open * 0.147155) + (self.low * (1 - 0.147155))), 2) /
-                  ((self.open * 0.147155) + (self.low * (1 - 0.147155)))) * -1), 3), 17), axis=1) * -1,
-                            index=self.close.index)
+                  ((self.open * 0.147155) + (self.low * (1 - 0.147155)))) * -1), 3), 17)) * -1
 
     def alpha074(self):
         """
@@ -680,10 +677,9 @@ class Alphas:
          20.0451)),rank(decay_linear(correlation(((high + low) / 2), adv40, 3.1614), 5.64125)))
         :return:
         """
-        return pd.DataFrame(np.min(rank(decay_linear(
+        return df_tuple_min(rank(decay_linear(
             ((((self.high + self.low) / 2) + self.high) - (self.vwap + self.high)), 20)), rank(
-            decay_linear(correlation(((self.high + self.low) / 2), sma(self.volume, 40), 3), 6)), axis=1),
-            index=self.close.index)
+            decay_linear(correlation(((self.high + self.low) / 2), sma(self.volume, 40), 3), 6)))
 
     def alpha078(self):
         """
@@ -754,9 +750,9 @@ class Alphas:
          Ts_Rank(decay_linear(correlation(Ts_Rank(close, 8.44728), Ts_Rank(adv60,20.6966), 8.01266), 6.65053), 2.61957))
         :return:
         """
-        return pd.DataFrame(np.min(rank(decay_linear(((rank(self.open) + rank(self.low)) - (
+        return df_tuple_min(rank(decay_linear(((rank(self.open) + rank(self.low)) - (
                 rank(self.high) + rank(self.close))), 8)), ts_rank(decay_linear(correlation(ts_rank(self.close, 8),
-                ts_rank(sma(self.volume, 60), 21), 8), 7), 3), axis=1), index=self.close.index)
+                ts_rank(sma(self.volume, 60), 21), 8), 7), 3))
 
     # Alpha#89	 (Ts_Rank(decay_linear(correlation(((low * 0.967285) + (low * (1 - 0.967285))), adv10,6.94279), 5.51607), 3.79744) - Ts_Rank(decay_linear(delta(IndNeutralize(vwap,IndClass.industry), 3.48158), 10.1466), 15.3012))
 
@@ -770,10 +766,9 @@ class Alphas:
          Ts_Rank(decay_linear(correlation(rank(low), rank(adv30), 7.58555), 6.94024),6.80584))
         :return:
         """
-        return pd.DataFrame(np.min(ts_rank(decay_linear(
+        return df_tuple_min(ts_rank(decay_linear(
             ((((self.high + self.low) / 2) + self.close) < (self.low + self.open)), 15), 19), ts_rank(
-            decay_linear(correlation(rank(self.low), rank(sma(self.volume, 30)), 8), 7), 7), axis=1),
-            index=self.close.index)
+            decay_linear(correlation(rank(self.low), rank(sma(self.volume, 30)), 8), 7), 7))
 
     # Alpha#93	 (Ts_Rank(decay_linear(correlation(IndNeutralize(vwap, IndClass.industry), adv81,17.4193), 19.848), 7.54455) / rank(decay_linear(delta(((close * 0.524434) + (vwap * (1 -0.524434))), 2.77377), 16.2664)))
 
@@ -803,9 +798,9 @@ class Alphas:
         Ts_Rank(adv60, 4.13242), 3.65459), 12.6556), 14.0365), 13.4143)) * -1)
         :return:
         """
-        return pd.DataFrame(np.max(ts_rank(decay_linear(correlation(rank(self.vwap), rank(self.volume), 4), 4), 8),
+        return df_tuple_max(ts_rank(decay_linear(correlation(rank(self.vwap), rank(self.volume), 4), 4), 8),
         ts_rank(decay_linear(ts_argmax(correlation(ts_rank(self.close, 7),
-        ts_rank(sma(self.volume, 60), 4), 4), 13), 14), 13), axis=1) * -1, index=self.close.index)
+        ts_rank(sma(self.volume, 60), 4), 4), 13), 14), 13)) * -1
 
     # Alpha#97	 ((rank(decay_linear(delta(IndNeutralize(((low * 0.721001) + (vwap * (1 - 0.721001))),IndClass.industry), 3.3705), 20.4523)) - Ts_Rank(decay_linear(Ts_Rank(correlation(Ts_Rank(low,7.87871), Ts_Rank(adv60, 17.255), 4.97547), 18.5925), 15.7152), 6.71659)) * -1)
 

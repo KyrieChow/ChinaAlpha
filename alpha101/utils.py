@@ -82,7 +82,7 @@ def decay_linear(df, period=10):
         df.fillna(value=0, inplace=True)
     na_lwma = np.zeros_like(df)
     na_lwma[:period, :] = df.iloc[:period, :]
-    na_series = df.as_matrix()
+    na_series = df.values
 
     divisor = period * (period + 1) / 2
     y = (np.arange(period) + 1) * 1.0 / divisor
@@ -91,7 +91,7 @@ def decay_linear(df, period=10):
     for row in range(period - 1, df.shape[0]):
         x = na_series[row - period + 1: row + 1, :]
         na_lwma[row, :] = (np.dot(x.T, y))
-    return pd.DataFrame(na_lwma, index=df.index)
+    return pd.DataFrame(na_lwma, index=df.index, columns=df.columns)
 
 
 def indneutralize(stock_data, sector_series):
@@ -291,3 +291,11 @@ def rolling_prod(na):
     :return: The product of the values in the array.
     """
     return np.prod(na)
+
+
+def df_tuple_max(df1, df2):
+    return (np.abs(df1 + df2) + np.abs(df1 - df2)) / 2
+
+
+def df_tuple_min(df1, df2):
+    return (np.abs(df1 + df2) - np.abs(df1 - df2)) / 2
